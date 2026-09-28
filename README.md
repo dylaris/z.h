@@ -1,8 +1,8 @@
-# kut.h
+# z.h
 
 **A header-only C library for generic containers and string utilities**
 
 ```c
-#define KUT_IMPLEMENTATION
-#include "kut.h"
+#define Z_IMPLEMENTATION
+#include "z.h"
 ```

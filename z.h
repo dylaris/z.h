@@ -21,8 +21,10 @@
 #define Z_FREE free
 #endif
 
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <stdarg.h>
 #include <stdbool.h>
 #include <assert.h>
 
@@ -37,9 +39,12 @@ typedef struct {
     size_t capacity;
 } z_array_header_t;
 
-#define z_arrhdr(a_) ((z_array_header_t*)((char*)(a_)-sizeof(z_array_header_t)))
-#define z_arrcnt(a_) ((a_) ? z_arrhdr(a_)->count : 0)
-#define z_arrcap(a_) ((a_) ? z_arrhdr(a_)->capacity : 0)
+#define z_arrhdr(a_)   ((z_array_header_t*)((char*)(a_)-sizeof(z_array_header_t)))
+#define z_arrcnt(a_)   ((a_) ? z_arrhdr(a_)->count : 0)
+#define z_arrcap(a_)   ((a_) ? z_arrhdr(a_)->capacity : 0)
+#define z_arrbegin(a_) (a_)
+#define z_arrend(a_)   ((a_) ? (a_) + z_arrcnt(a_) : NULL)
+
 #define z_arr_grow(a_) do {                                                        \
     z_array_header_t *h;                                                           \
     size_t old_cnt, old_cap, new_cap;                                              \
@@ -47,7 +52,7 @@ typedef struct {
     old_cnt = z_arrcnt(a_);                                                        \
     old_cap = z_arrcap(a_);                                                        \
     new_cap = old_cap < Z_ARRAY_INIT_CAPACITY ? Z_ARRAY_INIT_CAPACITY : 2*old_cap; \
-    h = Z_REALLOC(h, new_cap*sizeof(*(a_)));                                       \
+    h = Z_REALLOC(h, sizeof(*h)+new_cap*sizeof(*(a_)));                            \
     Z_ASSERT(h && "run out of memory");                                            \
     h->count = old_cnt;                                                            \
     h->capacity = new_cap;                                                         \
@@ -57,11 +62,11 @@ typedef struct {
     if (z_arrcnt(a_) + 1 > z_arrcap(a_)) { \
         z_arr_grow(a_);                    \
     }                                      \
-    (a_)[h->count++] = (item_);            \
+    (a_)[z_arrhdr(a_)->count++] = (item_); \
 } while (0)
-#define z_arr_pop(a_) (Z_ASSERT(z_arrcnt(a_) > 0 && "array underflow"), (a_)[--z_arrhdr(a_)->cnt])
-#define z_arr_foreach(T, a_, iter_) for (T *iter_ = (a_); iter < (a_) + z_arrcnt(a_); iter_++)
-#define z_arr_clear(a_) do { if (a_) z_arrhdr(a)->count = 0; } while (0)
+#define z_arr_pop(a_) (Z_ASSERT(z_arrcnt(a_) > 0 && "array underflow"), (a_)[--z_arrhdr(a_)->count])
+#define z_arr_foreach(a_, iter_) for (iter_ = z_arrbegin(a_); iter_ < z_arrend(a_); iter_++)
+#define z_arr_clear(a_) do { if (a_) z_arrhdr(a_)->count = 0; } while (0)
 #define z_arr_free(a_) do { if (a_) Z_FREE(z_arrhdr(a_)); (a_) = NULL; } while (0)
 
 #define z_wrapinc(x_, bound_)               (((x_) + 1 >= (bound_)) ? 0 : (x_) + 1)
@@ -125,25 +130,40 @@ typedef struct {
     size_t head;
 } z_deque_header_t;
 
-#define z_deqhdr(d_) ((z_deque_header_t*)((char*)(d_)-sizeof(z_deque_header_t)))
-#define z_deqcnt(d_) ((d_) ? z_deqhdr(d_)->count : 0)
-#define z_deqcap(d_) ((d_) ? z_deqhdr(d_)->capacity : 0)
+#ifndef Z_DEQUE_INIT_CAPACITY
+#define Z_DEQUE_INIT_CAPACITY 128
+#endif
+
+#define Z_DEQUE_INITIALIZER NULL
+
+#define z_deqhdr(d_)   ((z_deque_header_t*)((char*)(d_)-sizeof(z_deque_header_t)))
+#define z_deqcnt(d_)   ((d_) ? z_deqhdr(d_)->count : 0)
+#define z_deqcap(d_)   ((d_) ? z_deqhdr(d_)->capacity : 0)
+#define z_deqbegin(d_) ((d_) ? (d_) + z_deqhdr(d_)->head : NULL)
+#define z_deqend(d_)   ((d_) ? (d_) + (z_deqhdr(d_)->head + z_deqcnt(d_)) % z_deqcap(d_) : NULL)
+#define z_deqhead(d_)  (Z_ASSERT(z_deqcnt(d_) > 0 && "deque is empty"), (d_)[z_deqhdr(d_)->head])
+#define z_deqtail(d_)  (Z_ASSERT(z_deqcnt(d_) > 0 && "deque is empty"), \
+        (d_)[(z_deqhdr(d_)->head + z_deqcnt(d_) - 1) % z_deqcap(d_)])
+
 #define z_deq_grow(d_) do {                                                         \
     z_deque_header_t *h;                                                            \
     size_t old_cnt, old_cap, old_head, new_cap;                                     \
+    h = (d_) ? z_deqhdr(d_) : NULL;                                                 \
     old_cnt  = z_deqcnt(d_);                                                        \
     old_cap  = z_deqcap(d_);                                                        \
     old_head = h ? h->head : 0;                                                     \
     new_cap  = old_cap < Z_DEQUE_INIT_CAPACITY ? Z_DEQUE_INIT_CAPACITY : 2*old_cap; \
-    h = Z_MALLOC(new_cap*sizeof(*(d_)));                                            \
+    h = Z_MALLOC(sizeof(*h)+new_cap*sizeof(*(d_)));                                 \
     Z_ASSERT(h && "run out of memory");                                             \
-    memset(h, 0, new_cap*sizeof(*(d_)));                                            \
+    memset(h, 0, sizeof(*h)+new_cap*sizeof(*(d_)));                                 \
     if (d_) {                                                                       \
+        char *p;                                                                    \
         size_t offset;                                                              \
+        p = (char*)(h + 1);                                                         \
         offset = 0;                                                                 \
-        memmove(h+1+offset, (d_)+old_head, (old_cap-old_head)*sizeof(*(d_)));       \
+        memmove(p+offset, (d_)+old_head, (old_cap-old_head)*sizeof(*(d_)));         \
         offset = (old_cap-old_head)*sizeof(*(d_));                                  \
-        memmove(h+1+offset, (d_), old_head*sizeof(*(d_)));                          \
+        memmove(p+offset, (d_), old_head*sizeof(*(d_)));                            \
     }                                                                               \
     h->count    = old_cnt;                                                          \
     h->capacity = new_cap;                                                          \
@@ -173,11 +193,14 @@ typedef struct {
 #define z_deq_pop_back(d_) (Z_ASSERT(z_deqcnt(d_) > 0 && "deque underflow"), \
         z_deqhdr(d_)->count--,                                               \
         (d_)[(z_deqhdr(d_)->head + z_deqhdr(d_)->count) % z_deqhdr(d_)->capacity])
-#define z_deq_pop_front(d_) (Z_ASSERT(z_deqcnt(d_) > 0 && "deque underflow"), \
-        z_deqhdr(d_)->count--,                                                \
-        (d_)[z_deqhdr(d_)->head = (z_deqhdr(d_)->head + 1) % z_deqhdr(d_)->capacity])
+#define z_deq_pop_front(d_) (Z_ASSERT(z_deqcnt(d_) > 0 && "deque underflow"),   \
+        z_deqhdr(d_)->count--,                                                  \
+        z_deqhdr(d_)->head = (z_deqhdr(d_)->head + 1) % z_deqhdr(d_)->capacity, \
+        (d_)[(z_deqhdr(d_)->head + z_deqhdr(d_)->capacity - 1) % z_deqhdr(d_)->capacity])
 #define z_deq_clear(d_) do { if (d_) z_deqhdr(d_)->head = z_deqhdr(d_)->count = 0; } while (0)
 #define z_deq_free(d_) do { if (d_) Z_FREE(z_deqhdr(d_)); (d_) = NULL; } while (0)
+#define z_deq_foreach(d_, iter_) for (iter_ = z_deqbegin(d_); iter_ != z_deqend(d_); \
+        iter_ = (iter_ + 1) == (d_) + z_deqcap(d_) ? (d_) : (iter_ + 1))
 
 #endif /* Z_H */
 
@@ -194,7 +217,7 @@ ZAPI void *z_ta_alloc(size_t n)
     remain = Z_TEMP_BUFFER_CAPACITY - z__temp_used;
     if (remain < n) return NULL;
     p = &z__temp_buffer[z__temp_used];
-    z_temp_used += n;
+    z__temp_used += n;
     return p;
 }
 
@@ -230,7 +253,7 @@ ZAPI char *z_ta_strndup(const char *s, size_t n)
         memcpy(p, s, len);
         p[len] = '\0';
     }
-    retunr p;
+    return p;
 }
 
 ZAPI char *z_ta_sprintf(const char *fmt, ...)
@@ -445,9 +468,13 @@ ZAPI void z_sb_append_cstr(z_string_builder_t *sb, const char *cstr)
     #define arrhdr z_arrhdr
     #define arrcnt z_arrcnt
     #define arrcap z_arrcap
+    #define arrbegin z_arrbegin
+    #define arrend z_arrend
     #define arr_push z_arr_push
     #define arr_pop z_arr_pop
     #define arr_foreach z_arr_foreach
+    #define arr_clear z_arr_clear
+    #define arr_free z_arr_free
     #define wrapinc z_wrapinc
     #define wrapdec z_wrapdec
     #define clamp z_clamp
@@ -489,6 +516,10 @@ ZAPI void z_sb_append_cstr(z_string_builder_t *sb, const char *cstr)
     #define deqhdr z_deqhdr
     #define deqcnt z_deqcnt
     #define deqcap z_deqcap
+    #define deqbegin z_deqbegin
+    #define deqend z_deqend
+    #define deqhead z_deqhead
+    #define deqtail z_deqtail
     #define deq_grow z_deq_grow
     #define deq_push_back z_deq_push_back
     #define deq_push_front z_deq_push_front
@@ -496,4 +527,5 @@ ZAPI void z_sb_append_cstr(z_string_builder_t *sb, const char *cstr)
     #define deq_pop_front z_deq_pop_front
     #define deq_clear z_deq_clear
     #define deq_free z_deq_free
+    #define deq_foreach z_deq_foreach
 #endif /* Z_NOT_STRIP_OFF_PREFIX */
