@@ -28,6 +28,10 @@
 #include <stdbool.h>
 #include <assert.h>
 
+/*
+ * Dynamic Array
+ */
+
 #define Z_ARRAY_INITIALIZER NULL
 
 #ifndef Z_ARRAY_INIT_CAPACITY
@@ -69,6 +73,10 @@ typedef struct {
 #define z_arr_clear(a_) do { if (a_) z_arrhdr(a_)->count = 0; } while (0)
 #define z_arr_free(a_) do { if (a_) Z_FREE(z_arrhdr(a_)); (a_) = NULL; } while (0)
 
+/*
+ * Misc
+ */
+
 #define z_wrapinc(x_, bound_)               (((x_) + 1 >= (bound_)) ? 0 : (x_) + 1)
 #define z_wrapdec(x_, bound_)               (((x_) == 0) ? ((bound_) - 1) : (x_) - 1)
 #define z_clamp(x_, lo_, hi_)               ((x_) < (lo_) ? (lo_) : ((x_) > (hi_) ? (hi_) : (x_)))
@@ -76,6 +84,10 @@ typedef struct {
 #define z_container_of(ptr_, T, member_)    ((T*)((char*)(ptr_) - z_offset_of(T, member_)))
 #define z_align_up(x_, align_)              (((x_) + (align_) - 1) & ~((align_) - 1))
 #define z_align_down(x_, align_)            ((x_) & ~((align_) - 1))
+
+/*
+ * Temp Allocator
+ */
 
 #ifndef Z_TEMP_BUFFER_CAPACITY
 #define Z_TEMP_BUFFER_CAPACITY (2 << 10)
@@ -90,6 +102,10 @@ ZAPI char  *z_ta_sprintf(const char *fmt, ...);
 ZAPI char  *z_ta_snprintf(size_t n, const char *fmt, ...);
 ZAPI char  *z_ta_vsprintf(const char *fmt, va_list ap);
 ZAPI char  *z_ta_vsnprintf(size_t n, const char *fmt, va_list ap);
+
+/*
+ * String View
+ */
 
 typedef struct {
     size_t count;
@@ -109,6 +125,10 @@ ZAPI bool            z_sv_starts_with(z_string_view_t sv, z_string_view_t prefix
 ZAPI bool            z_sv_ends_with(z_string_view_t sv, z_string_view_t suffix);
 ZAPI bool            z_sv_equal(z_string_view_t a, z_string_view_t b);
 
+/*
+ * String Builder
+ */
+
 typedef struct {
     size_t count;
     size_t capacity;
@@ -123,6 +143,10 @@ ZAPI void            z_sb_append_char(z_string_builder_t *sb, char c);
 ZAPI void            z_sb_append_sv(z_string_builder_t *sb, z_string_view_t sv);
 ZAPI void            z_sb_append_cstr(z_string_builder_t *sb, const char *cstr);
 ZAPI void            z_sb_append_parts(z_string_builder_t *sb, const char *data, size_t n);
+
+/*
+ * Dynamic Deque
+ */
 
 typedef struct {
     size_t count;
@@ -202,9 +226,125 @@ typedef struct {
 #define z_deq_foreach(d_, iter_) for (iter_ = z_deqbegin(d_); iter_ != z_deqend(d_); \
         iter_ = (iter_ + 1) == (d_) + z_deqcap(d_) ? (d_) : (iter_ + 1))
 
+/*
+ * Compatibility Layer
+ */
+
+#ifdef _WIN32
+
+#include <windows.h>
+#include <errno.h>
+
+#define DT_UNKNOWN 0
+#define DT_DIR     1
+#define DT_REG     2
+
+struct dirent {
+    char d_name[MAX_PATH + 1];
+    int d_type;
+};
+
+typedef struct {
+    HANDLE          hFind;
+    WIN32_FIND_DATA data;
+    struct dirent   ent;
+    bool            first; /* first call readdir? */
+} DIR;
+
+DIR *opendir(const char *path);
+struct dirent *readdir(DIR *dir);
+int closedir(DIR *dir);
+
+#else
+
+#include <dirent.h>
+
+#endif /* _WIN32 */
+
 #endif /* Z_H */
 
 #ifdef Z_IMPLEMENTATION
+
+#ifdef _WIN32
+
+DIR *opendir(const char *dirpath)
+{
+    char buffer[MAX_PATH];
+    size_t len;
+    DIR *dp;
+
+    if (!dirpath) {
+        errno = EINVAL;
+        return NULL;
+    }
+
+    len = strlen(dirpath);
+    if (len == 0) {
+        snprintf(buffer, MAX_PATH, ".\\*");
+    } else if (len > 0 && (dirpath[len-1] == '\\' || dirpath[len-1] == '/')) {
+        snprintf(buffer, MAX_PATH, "%s*", dirpath);
+    } else {
+        snprintf(buffer, MAX_PATH, "%s\\*", dirpath);
+    }
+
+    dp = malloc(sizeof(DIR));
+    if (!dp) {
+        errno = ENOMEM;
+        return NULL;
+    }
+    memset(dp, 0, sizeof(DIR));
+
+    dp->hFind = FindFirstFile(buffer, &dp->data);
+    if (dp->hFind == INVALID_HANDLE_VALUE) {
+        free(dp);
+        errno = ENOENT;
+        return NULL;
+    }
+    dp->first = true;
+
+    return dp;
+}
+
+struct dirent *readdir(DIR *dp)
+{
+    if (!dp) {
+        errno = EINVAL;
+        return NULL;
+    }
+
+    if (dp->first) {
+        dp->first = false;
+    } else {
+        if (!FindNextFile(dp->hFind, &dp->data)) {
+            if (GetLastError() == ERROR_NO_MORE_FILES) return NULL;
+            errno = EIO;
+            return NULL;
+        }
+    }
+
+    strncpy(dp->ent.d_name, dp->data.cFileName, sizeof(dp->ent.d_name)-1);
+    dp->ent.d_name[sizeof(dp->ent.d_name)-1] = '\0';
+    if (dp->data.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) {
+        dp->ent.d_type = DT_DIR;
+    } else {
+        dp->ent.d_type = DT_REG;
+    }
+
+    return &dp->ent;
+}
+
+int closedir(DIR *dp)
+{
+    if (!dp) {
+        errno = EINVAL;
+        return -1;
+    }
+    FindClose(dp->hFind);
+    free(dp);
+    return 0;
+}
+
+#endif /* _WIN32 */
 
 static char z__temp_buffer[Z_TEMP_BUFFER_CAPACITY];
 static size_t z__temp_used;
