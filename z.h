@@ -95,7 +95,7 @@ typedef struct {
 
 ZAPI void  *z_ta_alloc(size_t n);
 ZAPI size_t z_ta_save(void);
-ZAPI void  *z_ta_restore(size_t checkpoint);
+ZAPI void   z_ta_restore(size_t checkpoint);
 ZAPI char  *z_ta_strdup(const char *s);
 ZAPI char  *z_ta_strndup(const char *s, size_t n);
 ZAPI char  *z_ta_sprintf(const char *fmt, ...);
@@ -227,6 +227,35 @@ typedef struct {
         iter_ = (iter_ + 1) == (d_) + z_deqcap(d_) ? (d_) : (iter_ + 1))
 
 /*
+ * Log
+ */
+
+typedef enum {
+    ZLOG_TRACE = 1,
+    ZLOG_DEBUG,
+    ZLOG_INFO,
+    ZLOG_WARN,
+    ZLOG_ERROR,
+    ZLOG_FATAL,
+} zlog_level_t;
+
+typedef struct {
+    zlog_level_t level;
+    FILE *sink;
+    const char *filepath;
+    bool append;
+    bool hold; /* auto cleanup sink? */
+} zlog_opt_t;
+
+#define zlog_init(...) zlog_init_with_opt((zlog_opt_t){__VA_ARGS__})
+void zlog_fini(void);
+void zlog_write(zlog_level_t level, const char *file, int line,
+        const char *fmt, ...) __attribute__((format(printf, 4, 5)));
+#define zlog(level_, fmt_, ...) do { \
+    zlog_write(level_, __FILE__, __LINE__, fmt_, ##__VA_ARGS__); \
+} while (0)
+
+/*
  * Compatibility Layer
  */
 
@@ -252,8 +281,8 @@ typedef struct {
 } DIR;
 
 DIR *opendir(const char *path);
-struct dirent *readdir(DIR *dir);
-int closedir(DIR *dir);
+struct dirent *readdir(DIR *dp);
+int closedir(DIR *dp);
 
 #else
 
@@ -264,6 +293,63 @@ int closedir(DIR *dir);
 #endif /* Z_H */
 
 #ifdef Z_IMPLEMENTATION
+
+static zlog_opt_t z__logger = {
+    .level    = ZLOG_INFO,
+    .sink     = NULL,
+    .filepath = NULL,
+    .append   = false,
+    .hold     = false,
+};
+
+ZAPI void zlog_init_with_opt(zlog_opt_t opt)
+{
+    if (opt.level > 0) z__logger.level = opt.level;
+    if (opt.sink) {
+        if (z__logger.hold) fclose(z__logger.sink);
+        z__logger.sink = opt.sink;
+        z__logger.hold = false;
+    }
+    if (opt.filepath) {
+        const char *mode = opt.append ? "a" : "w";
+        if (z__logger.hold) fclose(z__logger.sink);
+        z__logger.sink   = fopen(opt.filepath, mode);
+        z__logger.append = true;
+        z__logger.hold   = true;
+    }
+    if (!z__logger.sink) z__logger.sink = stderr;
+}
+
+ZAPI void zlog_fini(void)
+{
+    if (z__logger.hold && z__logger.sink) fclose(z__logger.sink);
+}
+
+ZAPI void zlog_write(zlog_level_t level, const char *file, int line,
+        const char *fmt, ...)
+{
+    char buffer[1024];
+    const char *level_name;
+    va_list ap;
+
+    if (level < z__logger.level) return;
+
+    switch (level) {
+    case ZLOG_TRACE: level_name = "TRACE"; break;
+    case ZLOG_DEBUG: level_name = "DEBUG"; break;
+    case ZLOG_INFO:  level_name = "INFO";  break;
+    case ZLOG_WARN:  level_name = "WARN";  break;
+    case ZLOG_ERROR: level_name = "ERROR"; break;
+    case ZLOG_FATAL: level_name = "FATAL"; break;
+    default:         assert(0 && "invalid level");
+    }
+
+    va_start(ap, fmt);
+    assert(vsnprintf(buffer, sizeof(buffer), fmt, ap) >= 0 && "vsnprintf format error");
+    va_end(ap);
+
+    fprintf(z__logger.sink, "[%s] %s:%d: %s\n", level_name, file, line, buffer);
+}
 
 #ifdef _WIN32
 
@@ -366,7 +452,7 @@ ZAPI size_t z_ta_save(void)
     return z__temp_used;
 }
 
-ZAPI void *z_ta_restore(size_t checkpoint)
+ZAPI void z_ta_restore(size_t checkpoint)
 {
     z__temp_used = checkpoint;
 }

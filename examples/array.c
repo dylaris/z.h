@@ -13,8 +13,8 @@ int main(void)
     arr_foreach(xs, iter) { printf("%d ", *iter); } printf("\n");
     printf("front: %d\n", xs[0]);
     printf("back: %d\n", xs[arrcnt(xs) - 1]);
-    printf("cnt: %d\n", arrcnt(xs));
-    printf("cap: %d\n", arrcap(xs));
+    printf("cnt: %lld\n", arrcnt(xs));
+    printf("cap: %lld\n", arrcap(xs));
 
     printf("====== test arr_pop ======\n");
     i = 20;
@@ -22,21 +22,21 @@ int main(void)
     printf("\n");
     printf("front: %d\n", xs[0]);
     printf("back: %d\n", xs[arrcnt(xs) - 1]);
-    printf("cnt: %d\n", arrcnt(xs));
-    printf("cap: %d\n", arrcap(xs));
+    printf("cnt: %lld\n", arrcnt(xs));
+    printf("cap: %lld\n", arrcap(xs));
 
     printf("====== test arr_push again ======\n");
     arr_push(xs, 999);
     arr_foreach(xs, iter) { printf("%d ", *iter); } printf("\n");
     printf("front: %d\n", xs[0]);
     printf("back: %d\n", xs[arrcnt(xs) - 1]);
-    printf("cnt: %d\n", arrcnt(xs));
-    printf("cap: %d\n", arrcap(xs));
+    printf("cnt: %lld\n", arrcnt(xs));
+    printf("cap: %lld\n", arrcap(xs));
 
     printf("====== test arr_clear ======\n");
     arr_clear(xs);
-    printf("cnt: %d\n", arrcnt(xs));
-    printf("cap: %d\n", arrcap(xs));
+    printf("cnt: %lld\n", arrcnt(xs));
+    printf("cap: %lld\n", arrcap(xs));
 
     arr_free(xs);
     return 0;
