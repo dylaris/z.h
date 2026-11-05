@@ -5,39 +5,14 @@
 int main(void)
 {
     int *xs = Z_ARRAY_INITIALIZER;
-    int i;
-    int *iter;
 
-    printf("====== test arr_push ======\n");
-    for (i = 0; i < 100; i++) arr_push(xs, i);
-    arr_foreach(xs, iter) { printf("%d ", *iter); } printf("\n");
-    printf("front: %d\n", xs[0]);
-    printf("back: %d\n", xs[arrcnt(xs) - 1]);
-    printf("cnt: %lld\n", arrcnt(xs));
-    printf("cap: %lld\n", arrcap(xs));
+    for (int i = 0; i < 5; i++) arr_push(xs, i);
+    arr_foreach(xs, int, iter) { printf("%d ", *iter); } printf("\n");
 
-    printf("====== test arr_pop ======\n");
-    i = 20;
-    while (i--) printf("%d ", arr_pop(xs));
-    printf("\n");
-    printf("front: %d\n", xs[0]);
-    printf("back: %d\n", xs[arrcnt(xs) - 1]);
-    printf("cnt: %lld\n", arrcnt(xs));
-    printf("cap: %lld\n", arrcap(xs));
+    printf("pop: %d\n", arr_pop(xs));
+    printf("count: %zu, capacity: %zu\n", arrcnt(xs), arrcap(xs));
 
-    printf("====== test arr_push again ======\n");
-    arr_push(xs, 999);
-    arr_foreach(xs, iter) { printf("%d ", *iter); } printf("\n");
-    printf("front: %d\n", xs[0]);
-    printf("back: %d\n", xs[arrcnt(xs) - 1]);
-    printf("cnt: %lld\n", arrcnt(xs));
-    printf("cap: %lld\n", arrcap(xs));
-
-    printf("====== test arr_clear ======\n");
     arr_clear(xs);
-    printf("cnt: %lld\n", arrcnt(xs));
-    printf("cap: %lld\n", arrcap(xs));
-
     arr_free(xs);
     return 0;
 }

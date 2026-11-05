@@ -5,40 +5,16 @@
 int main(void)
 {
     int *deq = Z_DEQUE_INITIALIZER;
-    int *iter;
-    int i;
 
-    printf("====== test deq_push ======\n");
-    for (i = 0; i < 2; i++) deq_push_back(deq, i);
-    for (i = 80; i > 0; i--) deq_push_front(deq, i);
-    deq_foreach(deq, iter) { printf("%d ", *iter); } printf("\n");
-    printf("head: %d\n", deqhead(deq));
-    printf("tail: %d\n", deqtail(deq));
-    printf("cnt:  %lld\n", deqcnt(deq));
-    printf("cap:  %lld\n", deqcap(deq));
+    deq_push_back(deq, 1);
+    deq_push_back(deq, 2);
+    deq_push_front(deq, 0);
+    deq_foreach(deq, int, iter) { printf("%d ", *iter); } printf("\n");
 
-    printf("====== test deq_pop ======\n");
-    for (i = 0; i < 20; i++) { printf("%d ", deq_pop_front(deq)); } printf("\n");
-    for (i = 0; i < 20; i++) { printf("%d ", deq_pop_back(deq)); } printf("\n");
-    deq_foreach(deq, iter) { printf("%d ", *iter); } printf("\n");
-    printf("head: %d\n", deqhead(deq));
-    printf("tail: %d\n", deqtail(deq));
-    printf("cnt:  %lld\n", deqcnt(deq));
-    printf("cap:  %lld\n", deqcap(deq));
-
-    printf("====== test deq_push again ======\n");
-    for (i = 0; i < 32; i++) deq_push_back(deq, i+10000);
-    for (i = 80; i > 0; i--) deq_push_front(deq, i+10000);
-    deq_foreach(deq, iter) { printf("%d ", *iter); } printf("\n");
-    printf("head: %d\n", deqhead(deq));
-    printf("tail: %d\n", deqtail(deq));
-    printf("cnt:  %lld\n", deqcnt(deq));
-    printf("cap:  %lld\n", deqcap(deq));
-
-    printf("====== test deq_clear ======\n");
-    deq_clear(deq);
-    printf("cnt: %lld\n", deqcnt(deq));
-    printf("cap: %lld\n", deqcap(deq));
+    printf("head: %d, tail: %d\n", deqhead(deq), deqtail(deq));
+    int front = deq_pop_front(deq);
+    int back = deq_pop_back(deq);
+    printf("pop front: %d, pop back: %d\n", front, back);
 
     deq_free(deq);
     return 0;

@@ -3,12 +3,10 @@
 
 int main(void)
 {
-    zlog_init(.level = ZLOG_WARN, .sink = stderr);
+    zlog_init(.level = ZLOG_INFO, .sink = stdout);
 
-    zlog(ZLOG_INFO, "this is info log");
-    zlog(ZLOG_WARN, "this is warn log");
-    zlog(ZLOG_ERROR, "this is error log");
-    zlog(ZLOG_FATAL, "this is fatal log");
+    zlog(ZLOG_INFO, "value = %d", 42);
+    zlog(ZLOG_WARN, "this message is visible");
 
     zlog_fini();
     return 0;
